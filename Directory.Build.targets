@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    Conditionally suppress the Avalonia build-time telemetry target (Avalonia.BuildServices >= 11.3.x).
+
+    What AvaloniaStats does:
+      - Fires BeforeTargets="CoreCompile" on every build
+      - Writes an anonymous telemetry record (hashed project name, TFM, Avalonia version,
+        OS, IDE, CI environment, persistent machine GUID) to a local AppData directory
+      - Spawns a background dotnet process (Avalonia.BuildServices.Collector.dll) that
+        POSTs the records to https://av-build-tel-api-v1.avaloniaui.net/api/usage
+      - Has no effect on the compiled output whatsoever
+
+    Why it crashes in the Nix sandbox:
+      Common.AppDataFolder calls Environment.GetFolderPath(LocalApplicationData,
+      SpecialFolderOption.Create), which on macOS goes through NSFileManager and tries
+      to create ~/Library/Application Support/AvaloniaUI/BuildServices. In the sandbox
+      $HOME is /var/empty (mode 000), so mkdir fails with EPERM / UnauthorizedAccessException.
+      This crash happens in a static initializer, *before* the AVALONIA_TELEMETRY_OPTOUT=1
+      environment variable is checked, so the official opt-out cannot help here.
+
+    Why Directory.Build.targets (not .props):
+      Directory.Build.props is imported BEFORE NuGet package .targets, so any target
+      defined there would be overridden by Avalonia.BuildServices.targets.
+      Directory.Build.targets is imported AFTER NuGet .targets, so this empty definition
+      wins and replaces the Avalonia one.
+
+    The override is conditioned on NIX_BUILD_TOP, an environment variable that the Nix
+    sandbox always sets (it points to the build's temp directory). It is never set during
+    a normal developer build, so telemetry is left intact outside of Nix.
+
+    To opt out of telemetry in non-Nix builds, set AVALONIA_TELEMETRY_OPTOUT=1 in your
+    environment; that is the official mechanism supported by Avalonia.
+  -->
+  <Target Name="AvaloniaStats" Condition="'$(NIX_BUILD_TOP)' != ''" />
+</Project>
