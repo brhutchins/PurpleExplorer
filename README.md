@@ -22,7 +22,37 @@ It's a simple tool to help you:
 
 ## How to run
 
-This project is provided only as source code.
+### With Nix (recommended)
+
+A Nix flake is provided for reproducible builds. You need [Nix](https://nixos.org/download/) with flakes enabled.
+
+```sh
+# Run directly without installing
+nix run github:philipmat/PurpleExplorer
+
+# Or, after cloning:
+nix run
+
+# Build only (output symlinked to ./result)
+nix build
+
+# Enter a development shell with the .NET 8 SDK available
+nix develop
+```
+
+> [!NOTE]
+> The flake includes a `Directory.Build.targets` file that suppresses an Avalonia telemetry MSBuild task
+> (`AvaloniaStats`) which attempts to write to a path that is read-only in sandboxed build environments.
+> This has no effect on the built application.
+
+> [!NOTE]
+> If you update NuGet dependencies, regenerate `deps.json` before committing:
+> ```sh
+> nix build .#purpleExplorer.passthru.fetch-deps && ./result deps.json
+> ```
+
+### Without Nix
+
 You need to have [.NET 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) or later installed.
 
 To build and run the project:
@@ -51,5 +81,6 @@ Since forking from the original project, the following significant updates have 
 * (editorconfig, better naming).
 * Added key bindings and buttons for closing windows.
 * Fixed various bugs including null reference exceptions, timeout issues, and app state handling.
+* Added a Nix-flake-based build
 
 For a full list of changes, see the git commit history.
