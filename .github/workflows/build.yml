@@ -1,4 +1,4 @@
-name: .NET Build
+name: Build and check
 
 on:
   push:
@@ -30,3 +30,83 @@ jobs:
 
     - name: Build
       run: dotnet build --no-restore
+
+  # On PRs: check that deps.json is up to date and warn if not.
+  # This is advisory only (continue-on-error: true) so it never blocks merging.
+  check-deps-json:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      in-sync: ${{ steps.check.outputs.in-sync }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@v16
+
+    - name: Regenerate deps.json
+      run: nix build .#purpleExplorer.passthru.fetch-deps && ./result deps.json
+
+    - name: Check if deps.json is out of date
+      id: check
+      run: |
+        if git diff --quiet deps.json; then
+          echo "deps.json is up to date."
+          echo "in-sync=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::deps.json is out of date. Run the following to update it:"
+          echo "::warning::  nix build .#purpleExplorer.passthru.fetch-deps && ./result deps.json"
+          echo "::warning::If you don't have Nix available, you can ignore the warning and rely on the CI to generate an update PR on merge to main"
+          git diff deps.json
+          echo "in-sync=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+
+  nix-build:
+    needs: check-deps-json
+    if: needs.check-deps-json.outputs.in-sync == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@v16
+
+    - name: Build with Nix
+      run: nix build
+
+  # On merge to main: if deps.json is stale, open a PR to update it.
+  update-deps-json:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@v16
+
+    - name: Regenerate deps.json
+      run: nix build .#purpleExplorer.passthru.fetch-deps && ./result deps.json
+
+    - name: Open a PR if deps.json has changed
+      uses: peter-evans/create-pull-request@v8
+      with:
+        branch: chore/update-deps-json
+        delete-branch: true
+        commit-message: "chore: regenerate deps.json"
+        title: "chore: update deps.json"
+        body: |
+          `deps.json` is out of date with the current NuGet dependencies.
+
+          This PR was opened automatically by CI after a merge to `main`.
+          Once the `nix-build` check passes, this can be merged without further review.
