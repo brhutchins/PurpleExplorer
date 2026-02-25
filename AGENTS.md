@@ -44,9 +44,25 @@ PurpleExplorer is a cross-platform desktop application for managing Azure Servic
 - **Tests**: Currently, the project lacks automated tests. When adding new features, consider adding unit tests in a separate test project (e.g., `PurpleExplorer.Tests`).
 
 ## Development Workflow
+
+### With Nix (if available)
+If `nix` is on your PATH, prefer the Nix-based workflow — it provides a fully reproducible environment without requiring a separately installed .NET SDK.
+
+- **Enter the dev shell:** `nix develop` (provides the .NET 8 SDK)
+- **Run the app:** `nix run` (or `dotnet run --project PurpleExplorer/PurpleExplorer.csproj` inside the shell)
+- **Build:** `nix build` (output symlinked to `./result`)
+- **After changing NuGet dependencies** (i.e. editing `PackageReference` entries in the `.csproj`), regenerate the Nix dependency lock file:
+  ```sh
+  nix build .#purpleExplorer.passthru.fetch-deps && ./result deps.json
+  ```
+  Commit the updated `deps.json` alongside the `.csproj` change. CI will warn on PRs and auto-commit on merge to main if this is forgotten.
+
+### Without Nix
 - **Running the app:** Use `dotnet run --project PurpleExplorer/PurpleExplorer.csproj`.
 - **Building:** `dotnet build`.
-- **Formatting:** Follow the existing C# coding style (standard .NET conventions).
+
+### Formatting
+- Follow the existing C# coding style (standard .NET conventions).
     - **Order of class members**: The order of class members should follow a logical sequence, starting with fields (constants, then readonly, then instance),
       then constructors, followed by properties, and finally methods.  
       - Within each category, the order is: public, protected, internal, private.
